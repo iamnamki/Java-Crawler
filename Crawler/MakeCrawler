@@ -1,0 +1,111 @@
+package com.encore.MakeStoreList;
+
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.net.URLDecoder;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+public class WebCrawler {
+
+	public static void proBycategory() throws IOException, InterruptedException {
+
+		// http://www.innisfree.com/kr/ko/Product.do?tp=3&catCd01=XA
+		// XA : 수분, XB : 보습, XF : 진정, XH : 각질, XE : 모공, XC : 트러블, XG : 화이트닝, XD : 안티에이징
+
+		String pdtName;
+		String line = null;
+		String Volume = null;
+		String price = null;
+		String userGrade;
+		String userid;
+		String userSexAge;
+		String userSex;
+		String userAge;
+		String userDate;
+		String reviewPoint;
+		String reviewTxt;
+		String[] categorys = { "XA", "XB", "XF", "XH", "XE", "XC", "XG", "XD" };
+
+		for (String category : categorys) {
+			System.out.println("============" + category + "==============");
+
+			String url = "";
+			Elements products = null;
+			int page = 1;
+			// File저장
+			String filename = "Innisfree_Product_info_" + category + ".csv";
+			//BufferedWriter bw = new BufferedWriter(new FileWriter(filename));
+			BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(filename), "utf-8"));
+			do {
+
+				url = "http://www.innisfree.com/kr/ko/ProductListSub.do?catCd01=" + category + "&catCd02=&tp=3&pageNo="
+						+ page++ + "&sortStr=3";
+				System.out.println(url);
+				Document doc = Jsoup.connect(url).get();
+				products = doc.select("div.listStyle1>ul>li");
+
+				System.out.println("page: " + page + " size: " + products.size());
+				if (!products.hasClass("noList"))
+					for (Element pro : products) {
+						String productInfo = pro.select("p.pdtName>a>em").text();
+						line = productInfo.split(" ")[0];
+						Volume = productInfo.split(" ")[productInfo.split(" ").length - 1];
+						price = pro.select("div.listCon>div.listTxt>p.price").text();
+						// : /kr/ko/ProductReviewListSub.do?prdSeq=17896
+						String detailPageHref = doc.select("div.listStyle1>ul>li p.pdtName>a").attr("href");
+						String name = doc.select("div.listStyle1>ul>li p.pdtName>a").attr("alt");
+						// : 상품명 decode
+						String decodeResult = URLDecoder.decode("name", "UTF-8");
+						// 전체리뷰페이지
+						String detailUrl = "";
+						Elements userInfo = null;
+						int index = 1;
+						do {
+							detailUrl = "http://www.innisfree.com/kr/ko/ProductReviewListSub.do?prdSeq="
+									+ detailPageHref.split("=")[1] + "&prdNm=" + decodeResult + "&mode=prd&pageNo="
+									+ index++ + "&reviewCl=&sort=1";
+							System.out.println(detailUrl);
+
+							Document detaildoc = Jsoup.connect(detailUrl).get();
+							userInfo = detaildoc.select("ul>li");
+							if (!userInfo.hasClass("noList"))
+								for (Element user : userInfo) {
+									pdtName = user.select("div.reviewCon>div.reviewConTxt>p.pdtName").text();
+									userGrade = user.select("div.userInfo>p.userId>span").text();
+									userid = user.select("div.userInfo>p.userId").text().split(" ")[1];
+									userSexAge = user.select("div.userInfo>p.userSex").text();
+									userSex = userSexAge.split(" / ")[0];
+									userAge = userSexAge.split(" / ")[1];
+									userDate = user.select("div.userInfo>p.userDate").text();
+									reviewPoint = user.select("div.userInfo>p.reviewPoint>span>em").text();
+									reviewTxt = user.select("div.reviewCon>div.reviewConTxt>p.txt").text();
+
+									ProductDTO productEA = new ProductDTO(pdtName, category, line, Volume, price,
+											userGrade, userid, userSex, userAge, userDate, reviewPoint, reviewTxt);
+									System.out.println(productEA);
+
+									bw.write(productEA.toString());
+									bw.newLine();
+								}
+							if (index == 3) {
+								index = 1;
+								break;
+							}
+						} while (!userInfo.hasClass("noList"));
+					}
+			} while (!products.hasClass("noList"));
+			bw.close();
+
+		}
+	}
+
+	public static void main(String[] args) throws IOException, InterruptedException {
+		proBycategory();
+	}
+}
